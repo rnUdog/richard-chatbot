@@ -29,7 +29,7 @@ app.post("/chat", async (req, res) => {
 
     const project = process.env.GOOGLE_PROJECT_ID;
     const location = "us-central1";
-    const model = "gemini-2.0-flash-001";
+    const model = "gemini-2.0-flash";
 
     const messages = [
       ...(history || []).map(m => ({
