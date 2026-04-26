@@ -41,7 +41,9 @@ app.post("/chat", async (req, res) => {
     );
 
     const data = await response.json();
-    const reply = data.candidates[0].content.parts[0].text;
+    console.log("Gemini response:", JSON.stringify(data));
+    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text 
+  || "I'm unable to respond right now. Please try again.";
     res.json({ reply });
   } catch (error) {
     console.error(error);
