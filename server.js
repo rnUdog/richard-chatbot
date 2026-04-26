@@ -1,9 +1,16 @@
 const express = require("express");
 const cors = require("cors");
+const { VertexAI } = require("@google-cloud/vertexai");
+const fs = require("fs");
+const path = require("path");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+const keyPath = path.join("/tmp", "service-account.json");
+fs.writeFileSync(keyPath, process.env.GOOGLE_SERVICE_ACCOUNT);
+process.env.GOOGLE_APPLICATION_CREDENTIALS = keyPath;
 
 const SYSTEM_PROMPT = `You are Richard, a professional assistant for a fitness store.
 
@@ -19,36 +26,27 @@ Never use filler phrases like "Great question!" or "Of course!". Get straight to
 app.post("/chat", async (req, res) => {
   const { message, history } = req.body;
 
-  const contents = [
-    ...(history || []).map(m => ({
+  try {
+    const vertexAI = new VertexAI({
+      project: process.env.GOOGLE_PROJECT_ID,
+      location: "us-central1"
+    });
+
+    const model = vertexAI.getGenerativeModel({
+      model: "publishers/google/models/gemini-2.0-flash-001",
+      systemInstruction: SYSTEM_PROMPT
+    });
+
+    const formattedHistory = (history || []).map(m => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }]
-    })),
-    { role: "user", parts: [{ text: message }] }
-  ];
+    }));
 
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-          contents: contents
-        })
-      }
-    );
+    const chat = model.startChat({ history: formattedHistory });
+    const result = await chat.sendMessage(message);
+    const reply = result.response.candidates[0].content.parts[0].text;
 
-    const data = await response.json();
-    console.log("Gemini response:", JSON.stringify(data));
-    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text 
-  || "I'm unable to respond right now. Please try again.";
     res.json({ reply });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Richard is unavailable right now." });
-  }
-});
-
-app.listen(3000, () => console.log("Richard is online."));
+    res.status(500).
